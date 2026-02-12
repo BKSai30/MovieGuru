@@ -2,9 +2,11 @@ import { Play, Star, Plus, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const MovieCard = ({ movie, isFavorite, onToggleFavorite }) => {
-    const imageUrl = movie.poster_path
-        ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-        : 'https://via.placeholder.com/500x750?text=No+Image';
+    const imageUrl = movie.poster_path?.startsWith('http')
+        ? movie.poster_path
+        : movie.poster_path
+            ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+            : 'https://via.placeholder.com/500x750?text=No+Image';
 
     const ratingColor = movie.vote_average >= 7 ? 'text-green-400' : 'text-yellow-400';
 
@@ -28,8 +30,8 @@ const MovieCard = ({ movie, isFavorite, onToggleFavorite }) => {
                     <button
                         onClick={() => onToggleFavorite(movie)}
                         className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${isFavorite
-                                ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30'
-                                : 'bg-white text-black hover:bg-primary hover:text-white border-none'
+                            ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30'
+                            : 'bg-white text-black hover:bg-primary hover:text-white border-none'
                             }`}
                     >
                         {isFavorite ? <><Check size={16} /> Saved</> : <><Plus size={16} /> Add to Favorites</>}
