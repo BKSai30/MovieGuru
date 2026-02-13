@@ -1,3 +1,4 @@
+
 import os
 import sqlite3
 import json
@@ -30,10 +31,7 @@ TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 OMDB_URL = "http://www.omdbapi.com/"
 
-# Configure Gemini
-# if GEMINI_API_KEY:
-#    genai.configure(api_key=GEMINI_API_KEY)
-
+# Users File
 USERS_FILE = 'users.json'
 
 def load_users():
@@ -283,7 +281,7 @@ def recommend():
                                                 })
                                     except Exception as omdb_err:
                                         print(f"OMDb fetch error for {title}: {omdb_err}")
-
+                            
                         except json.JSONDecodeError as json_err:
                             print(f"JSON Parse Error: {json_err} - Raw text: {text_content}")
                             explanation = "AI response was malformed."
