@@ -51,3 +51,4 @@ instance/
 # Uncomment these if you want to keep data local only
 # backend/users.json
 # backend/posts.json
+backend/serviceAccountKey.json
