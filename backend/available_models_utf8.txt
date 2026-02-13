@@ -1,0 +1,49 @@
+Introspecting client.models...
+Methods: ['__class__', '__delattr__', '__dict__', '__dir__', '__doc__', '__eq__', '__firstlineno__', '__format__', '__ge__', '__getattribute__', '__getstate__', '__gt__', '__hash__', '__init__', '__init_subclass__', '__le__', '__lt__', '__module__', '__ne__', '__new__', '__reduce__', '__reduce_ex__', '__repr__', '__setattr__', '__sizeof__', '__static_attributes__', '__str__', '__subclasshook__', '__weakref__', '_api_client', '_edit_image', '_generate_content', '_generate_content_stream', '_generate_images', '_generate_videos', '_list', '_upscale_image', 'compute_tokens', 'count_tokens', 'delete', 'edit_image', 'embed_content', 'generate_content', 'generate_content_stream', 'generate_images', 'generate_videos', 'get', 'list', 'recontext_image', 'segment_image', 'update', 'upscale_image', 'vertexai']
+
+--- Listing Models via client.models.list() ---
+Model Name: models/gemini-2.5-flash
+Model Name: models/gemini-2.5-pro
+Model Name: models/gemini-2.0-flash
+Model Name: models/gemini-2.0-flash-001
+Model Name: models/gemini-2.0-flash-exp-image-generation
+Model Name: models/gemini-2.0-flash-lite-001
+Model Name: models/gemini-2.0-flash-lite
+Model Name: models/gemini-exp-1206
+Model Name: models/gemini-2.5-flash-preview-tts
+Model Name: models/gemini-2.5-pro-preview-tts
+Model Name: models/gemma-3-1b-it
+Model Name: models/gemma-3-4b-it
+Model Name: models/gemma-3-12b-it
+Model Name: models/gemma-3-27b-it
+Model Name: models/gemma-3n-e4b-it
+Model Name: models/gemma-3n-e2b-it
+Model Name: models/gemini-flash-latest
+Model Name: models/gemini-flash-lite-latest
+Model Name: models/gemini-pro-latest
+Model Name: models/gemini-2.5-flash-lite
+Model Name: models/gemini-2.5-flash-image
+Model Name: models/gemini-2.5-flash-preview-09-2025
+Model Name: models/gemini-2.5-flash-lite-preview-09-2025
+Model Name: models/gemini-3-pro-preview
+Model Name: models/gemini-3-flash-preview
+Model Name: models/gemini-3-pro-image-preview
+Model Name: models/nano-banana-pro-preview
+Model Name: models/gemini-robotics-er-1.5-preview
+Model Name: models/gemini-2.5-computer-use-preview-10-2025
+Model Name: models/deep-research-pro-preview-12-2025
+Model Name: models/gemini-embedding-001
+Model Name: models/aqa
+Model Name: models/imagen-4.0-generate-preview-06-06
+Model Name: models/imagen-4.0-ultra-generate-preview-06-06
+Model Name: models/imagen-4.0-generate-001
+Model Name: models/imagen-4.0-ultra-generate-001
+Model Name: models/imagen-4.0-fast-generate-001
+Model Name: models/veo-2.0-generate-001
+Model Name: models/veo-3.0-generate-001
+Model Name: models/veo-3.0-fast-generate-001
+Model Name: models/veo-3.1-generate-preview
+Model Name: models/veo-3.1-fast-generate-preview
+Model Name: models/gemini-2.5-flash-native-audio-latest
+Model Name: models/gemini-2.5-flash-native-audio-preview-09-2025
+Model Name: models/gemini-2.5-flash-native-audio-preview-12-2025

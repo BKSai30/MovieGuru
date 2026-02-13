@@ -1,0 +1,16 @@
+
+Testing model: grok-2
+Status Code: 400
+Error with grok-2: 400 - {"code":"Client specified an invalid argument","error":"Model not found: grok-2"}
+
+Testing model: grok-2-latest
+Status Code: 400
+Error with grok-2-latest: 400 - {"code":"Client specified an invalid argument","error":"Model not found: grok-2-latest"}
+
+Testing model: grok-beta
+Status Code: 400
+Error with grok-beta: 400 - {"code":"Client specified an invalid argument","error":"Model not found: grok-beta"}
+
+Testing model: grok-2-1212
+Status Code: 400
+Error with grok-2-1212: 400 - {"code":"Client specified an invalid argument","error":"Model not found: grok-2-1212"}

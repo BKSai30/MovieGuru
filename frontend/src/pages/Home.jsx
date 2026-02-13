@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { getRecommendations, toggleFavorite, getFavorites } from '../lib/api';
 import SearchBar from '../components/SearchBar';
 import MovieCard from '../components/MovieCard';
+import MovieDetailModal from '../components/MovieDetailModal';
 import { useEffect } from 'react';
+import { AnimatePresence } from 'framer-motion';
 
 const Home = () => {
     const [movies, setMovies] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [favorites, setFavorites] = useState(new Set());
+    const [explanation, setExplanation] = useState('');
+    const [selectedMovie, setSelectedMovie] = useState(null);
 
     // Fetch favs initially to show correct state
     useEffect(() => {
@@ -20,12 +24,14 @@ const Home = () => {
     const handleSearch = async (mood) => {
         setLoading(true);
         setError(null);
+        setExplanation('');
         try {
             const data = await getRecommendations(mood);
             console.log('API Response:', data); // Debug log
             const results = data.movies || [];
             if (results.length === 0) setError("No movies found for that mood. Try something else!");
             setMovies(results);
+            setExplanation(data.explanation || '');
         } catch (err) {
             console.error(err);
             setError("Failed to fetch recommendations. Please try again.");
@@ -68,6 +74,20 @@ const Home = () => {
                 </div>
             )}
 
+            {explanation && !loading && !error && (
+                <div className="max-w-3xl mx-auto mb-10 p-6 bg-surface/50 border border-white/5 rounded-xl backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <div className="flex gap-4 items-start">
+                        <div className="p-2 bg-primary/20 rounded-lg text-primary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        </div>
+                        <div>
+                            <h3 className="font-semibold text-lg mb-1 text-white">AI Suggestion</h3>
+                            <p className="text-gray-300 leading-relaxed">{explanation}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {movies.length > 0 && (
                 <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
                     <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -81,11 +101,21 @@ const Home = () => {
                                 movie={movie}
                                 isFavorite={favorites.has(movie.id)}
                                 onToggleFavorite={handleToggle}
+                                onClick={setSelectedMovie}
                             />
                         ))}
                     </div>
                 </div>
             )}
+
+            <AnimatePresence>
+                {selectedMovie && (
+                    <MovieDetailModal
+                        movie={selectedMovie}
+                        onClose={() => setSelectedMovie(null)}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 };

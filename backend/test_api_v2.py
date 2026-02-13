@@ -1,10 +1,19 @@
 import requests
 import json
 
-OMDB_API_KEY = "2e4979df"
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 OMDB_URL = "http://www.omdbapi.com/"
-GEMINI_API_KEY = "AIzaSyBeFo-MvcIzMFjb9iJA4y6KZRsDCaDZKl8"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    print("Warning: GEMINI_API_KEY not found in .env")
+
+# Use correct model
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
 
 def test_start():
     print("Beginning tests...")

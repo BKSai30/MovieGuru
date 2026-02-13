@@ -1,7 +1,7 @@
 import { Play, Star, Plus, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const MovieCard = ({ movie, isFavorite, onToggleFavorite }) => {
+const MovieCard = ({ movie, isFavorite, onToggleFavorite, onClick }) => {
     const imageUrl = movie.poster_path?.startsWith('http')
         ? movie.poster_path
         : movie.poster_path
@@ -15,7 +15,8 @@ const MovieCard = ({ movie, isFavorite, onToggleFavorite }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             layout
-            className="group relative bg-surface rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1"
+            onClick={() => onClick(movie)}
+            className="group relative bg-surface rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer"
         >
             <div className="aspect-[2/3] w-full relative overflow-hidden">
                 <img
@@ -28,7 +29,10 @@ const MovieCard = ({ movie, isFavorite, onToggleFavorite }) => {
                         {movie.overview}
                     </p>
                     <button
-                        onClick={() => onToggleFavorite(movie)}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleFavorite(movie);
+                        }}
                         className={`w-full py-2 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${isFavorite
                             ? 'bg-red-500/20 text-red-500 border border-red-500/50 hover:bg-red-500/30'
                             : 'bg-white text-black hover:bg-primary hover:text-white border-none'

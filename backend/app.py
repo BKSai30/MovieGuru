@@ -11,14 +11,45 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY") # Keep for fallback
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-TMDB_DISCOVER_URL = "https://api.themoviedb.org/3/discover/movie"
+
+# Sanitize keys (remove quotes if present)
+if OPENROUTER_API_KEY: OPENROUTER_API_KEY = OPENROUTER_API_KEY.strip().replace('"', '').replace("'", "")
+if OMDB_API_KEY: OMDB_API_KEY = OMDB_API_KEY.strip().replace('"', '').replace("'", "")
+if TMDB_API_KEY: TMDB_API_KEY = TMDB_API_KEY.strip().replace('"', '').replace("'", "")
+
+print(f"DEBUG: Loaded OpenRouter Key: {OPENROUTER_API_KEY[:5]}...{OPENROUTER_API_KEY[-5:] if OPENROUTER_API_KEY else 'None'}")
+print(f"DEBUG: Loaded OMDb Key: {OMDB_API_KEY}")
+
+if not OPENROUTER_API_KEY:
+    print("CRITICAL WARNING: OPENROUTER_API_KEY is missing from environment!")
+
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 OMDB_URL = "http://www.omdbapi.com/"
 
-# Initialize DB
+# Configure Gemini
+# if GEMINI_API_KEY:
+#    genai.configure(api_key=GEMINI_API_KEY)
+
+USERS_FILE = 'users.json'
+
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        return {}
+    try:
+        with open(USERS_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_users(users):
+    with open(USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
+# Initialize DB (Keeping for search history if needed, but primary auth is JSON now)
 def get_db_connection():
     conn = sqlite3.connect('movieguru.db')
     conn.row_factory = sqlite3.Row
@@ -34,22 +65,46 @@ def init_db():
             result_count INTEGER,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-
-        CREATE TABLE IF NOT EXISTS favorites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            tmdb_id INTEGER UNIQUE NOT NULL,
-            title TEXT NOT NULL,
-            poster_path TEXT,
-            release_date TEXT,
-            overview TEXT,
-            rating REAL
-        );
     ''')
     conn.commit()
     conn.close()
     print("Database connected and initialized.")
 
 init_db()
+
+@app.route('/api/signup', methods=['POST'])
+def signup():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    
+    if not email or not password:
+        return jsonify({'error': 'Email and password required'}), 400
+        
+    users = load_users()
+    if email in users:
+        return jsonify({'error': 'User already exists'}), 400
+        
+    users[email] = {
+        'password': password, # In production, HASH THIS!
+        'favorites': []
+    }
+    save_users(users)
+    return jsonify({'email': email, 'favorites': []})
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    
+    users = load_users()
+    user = users.get(email)
+    
+    if not user or user['password'] != password:
+        return jsonify({'error': 'Invalid credentials'}), 401
+        
+    return jsonify({'email': email, 'favorites': user.get('favorites', [])})
 
 def get_mock_movies():
     return [
@@ -86,174 +141,296 @@ def recommend():
     if not mood:
         return jsonify({'error': 'Mood is required'}), 400
 
-    try:
-        genre_ids = []
-        movies = []
-        
-        # 1. Try OMDb Strategy (Gemini -> Titles -> OMDb)
-        if OMDB_API_KEY and len(OMDB_API_KEY) >= 8: # Basic validation
-            try:
-                # Ask Gemini for Titles
-                prompt = f"""Suggest 5 specific movie titles that match the mood '{mood}'. 
-                Return ONLY a JSON array of strings (e.g., ["Movie 1", "Movie 2"]). 
-                Do not include generic descriptions or markdown formatting."""
-                
-                payload = {"contents": [{"parts": [{"text": prompt}]}]}
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(GEMINI_URL, json=payload, headers=headers)
-                response.raise_for_status()
-                
-                gemini_data = response.json()
-                text = gemini_data['candidates'][0]['content']['parts'][0]['text']
-                clean_text = text.replace('```json', '').replace('```', '').strip()
-                suggested_titles = json.loads(clean_text)
-                
-                # Fetch details from OMDb
-                for title in suggested_titles:
-                    omdb_params = {'apikey': OMDB_API_KEY, 't': title}
-                    omdb_res = requests.get(OMDB_URL, params=omdb_params)
-                    if omdb_res.status_code == 200:
-                        data = omdb_res.json()
-                        if data.get('Response') == 'True':
-                            # Parse ID
-                            imdb_id = data.get('imdbID', '0')
-                            # Try to convert tt12345 to integer 12345 for DB compatibility
+    movies = []
+    explanation = ""
+
+    print(f"DEBUG: Processing mood: {mood}")
+
+    # Check which API to use for metadata
+    # We consider TMDB key valid if it's not the placeholder and has some length
+    use_tmdb = TMDB_API_KEY and len(TMDB_API_KEY) > 20 and "YOUR_TMDB_API_KEY" not in TMDB_API_KEY
+    print(f"DEBUG: Using TMDB: {use_tmdb}, Using OMDb: {bool(OMDB_API_KEY)}")
+
+    # Strategy 1: AI-Powered Recommendation (OpenRouter - Grok)
+    if OPENROUTER_API_KEY:
+        try:
+            print("DEBUG: Asking OpenRouter (Grok) for recommendations...")
+            
+            prompt = f"""
+            Act as a movie expert. The user is feeling: "{mood}".
+            Suggest 5 movies that perfectly match this emotional state or theme.
+            For each movie, provide:
+            1. The exact movie title.
+            2. A short, 1-sentence explanation of why it fits this specific mood.
+            
+            Return ONLY a raw JSON array of objects. Do not use markdown code blocks.
+            Format:
+            [
+                {{"title": "Movie Title 1", "reason": "Explanation 1"}},
+                {{"title": "Movie Title 2", "reason": "Explanation 2"}}
+            ]
+            """
+
+            # Models to try (Free tier)
+            models_to_try = [
+                "openrouter/free",
+                "google/gemini-2.0-flash-exp:free",
+                "mistralai/mistral-7b-instruct:free"
+            ]
+
+            success = False
+            for model in models_to_try:
+                try:
+                    print(f"DEBUG: Trying OpenRouter model: {model}")
+                    
+                    # Call OpenRouter API
+                    url = "https://openrouter.ai/api/v1/chat/completions"
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': f'Bearer {OPENROUTER_API_KEY}',
+                        'HTTP-Referer': 'http://localhost:5173',  # Client URL
+                        'X-Title': 'MovieGuru'
+                    }
+                    payload = {
+                        "messages": [
+                            {"role": "system", "content": "You are a helpful movie expert."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        "model": model,
+                        "stream": False,
+                        "temperature": 0.7
+                    }
+                    
+                    response = requests.post(url, headers=headers, json=payload)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        text_content = data['choices'][0]['message']['content']
+                        
+                        try:
+                            clean_json = text_content.replace('```json', '').replace('```', '').strip()
                             try:
-                                db_id = int(imdb_id.replace('tt', ''))
+                                recommendations = json.loads(clean_json)
                             except:
-                                db_id = hash(imdb_id) % 100000000 # Fallback hash
+                                # Regex fallback
+                                import re
+                                match = re.search(r'\[.*\]', clean_json, re.DOTALL)
+                                if match:
+                                    recommendations = json.loads(match.group(0))
+                                else:
+                                    raise Exception("Could not find JSON in response")
+                            
+                            print(f"DEBUG: {model} suggested: {[r.get('title') for r in recommendations]}")
+                            
+                            explanation = f"Here are some picks for your mood: '{mood}'"
+
+                            # Fetch details
+                            for rec in recommendations:
+                                title = rec.get('title')
+                                reason = rec.get('reason')
                                 
+                                # Use TMDB if valid, else OMDb
+                                if use_tmdb:
+                                     try:
+                                        search_url = f"{TMDB_BASE_URL}/search/movie"
+                                        params = {
+                                            'api_key': TMDB_API_KEY,
+                                            'query': title,
+                                            'language': 'en-US',
+                                            'page': 1,
+                                            'include_adult': 'false'
+                                        }
+                                        tmdb_res = requests.get(search_url, params=params)
+                                        
+                                        if tmdb_res.status_code == 200:
+                                            results = tmdb_res.json().get('results', [])
+                                            if results:
+                                                movie_data = results[0]
+                                                movies.append({
+                                                    'id': movie_data.get('id'),
+                                                    'title': movie_data.get('title'),
+                                                    'poster_path': movie_data.get('poster_path'),
+                                                    'release_date': movie_data.get('release_date', ''),
+                                                    'overview': movie_data.get('overview'),
+                                                    'ai_reason': reason, 
+                                                    'vote_average': movie_data.get('vote_average', 0),
+                                                    'original_language': movie_data.get('original_language')
+                                                })
+                                     except Exception as tmdb_err:
+                                        print(f"TMDB fetch error for {title}: {tmdb_err}")
+                                
+                                elif OMDB_API_KEY:
+                                    try:
+                                        omdb_res = requests.get(OMDB_URL, params={'apikey': OMDB_API_KEY, 't': title})
+                                        if omdb_res.status_code == 200:
+                                            details = omdb_res.json()
+                                            if details.get('Response') == 'True':
+                                                imdb_id = details.get('imdbID', '0')
+                                                try:
+                                                    db_id = int(imdb_id.replace('tt', ''))
+                                                except:
+                                                    db_id = abs(hash(imdb_id)) % 100000000
+                                                    
+                                                movies.append({
+                                                    'id': db_id,
+                                                    'title': details.get('Title'),
+                                                    'poster_path': details.get('Poster'),
+                                                    'release_date': details.get('Released', details.get('Year')),
+                                                    'overview': details.get('Plot'),
+                                                    'ai_reason': reason,
+                                                    'vote_average': float(details.get('imdbRating', 0) if details.get('imdbRating') != 'N/A' else 0),
+                                                    'imdb_id': imdb_id
+                                                })
+                                    except Exception as omdb_err:
+                                        print(f"OMDb fetch error for {title}: {omdb_err}")
+
+                        except json.JSONDecodeError as json_err:
+                            print(f"JSON Parse Error: {json_err} - Raw text: {text_content}")
+                            explanation = "AI response was malformed."
+                        
+                        success = True
+                        break # Exit loop on success
+
+                    else:
+                        print(f"OpenRouter API failed with {model}: {response.status_code} - {response.text}")
+                        # Continue to next model
+                
+                except Exception as e:
+                    print(f"Request Exception with {model}: {e}")
+                    # Continue to next model
+
+            if not success:
+                 explanation = "AI services temporarily unavailable."
+        except Exception as outer_e:
+             print(f"AI Setup Error: {outer_e}")
+
+    # Strategy 2: Fallback to Keyword Search
+    if not movies:
+        print(f"DEBUG: Falling back to keyword search for: {mood}")
+        if use_tmdb:
+            try:
+                discover_url = f"{TMDB_BASE_URL}/search/movie"
+                params = {'api_key': TMDB_API_KEY, 'query': mood, 'include_adult': 'false'}
+                tmdb_res = requests.get(discover_url, params=params)
+                if tmdb_res.status_code == 200:
+                    results = tmdb_res.json().get('results', [])
+                    if results:
+                        explanation = f"No specific AI recommendations found, but these match '{mood}'."
+                        for item in results[:5]:
                             movies.append({
-                                'id': db_id,
-                                'title': data.get('Title'),
-                                'poster_path': data.get('Poster'), # Full URL
-                                'release_date': data.get('Released', data.get('Year')),
-                                'overview': data.get('Plot'),
-                                'vote_average': float(data.get('imdbRating', 0) if data.get('imdbRating') != 'N/A' else 0),
-                                'imdb_id': imdb_id
+                                'id': item.get('id'),
+                                'title': item.get('title'),
+                                'poster_path': item.get('poster_path'),
+                                'release_date': item.get('release_date', ''),
+                                'overview': item.get('overview'),
+                                'vote_average': item.get('vote_average', 0)
                             })
             except Exception as e:
-                print(f"OMDb/Gemini Error: {e}")
-                
-                # Fallback: Direct OMDb Search using mood as keyword
-                print(f"Attempting direct OMDb search for: {mood}")
-                try:
-                    omdb_params = {'apikey': OMDB_API_KEY, 's': mood, 'type': 'movie'}
-                    omdb_res = requests.get(OMDB_URL, params=omdb_params)
-                    if omdb_res.status_code == 200:
-                        search_data = omdb_res.json()
-                        if search_data.get('Response') == 'True':
-                            for item in search_data.get('Search', [])[:5]: # Limit to 5
-                                # Fetch full details to get Plot and Rating
-                                details_res = requests.get(OMDB_URL, params={'apikey': OMDB_API_KEY, 'i': item['imdbID']})
-                                if details_res.status_code == 200:
-                                    data = details_res.json()
-                                    
-                                    # Parse ID
-                                    imdb_id = data.get('imdbID', '0')
-                                    try:
-                                        db_id = int(imdb_id.replace('tt', ''))
-                                    except:
-                                        db_id = hash(imdb_id) % 100000000 
-                                        
-                                    movies.append({
-                                        'id': db_id,
-                                        'title': data.get('Title'),
-                                        'poster_path': data.get('Poster'), 
-                                        'release_date': data.get('Released', data.get('Year')),
-                                        'overview': data.get('Plot'),
-                                        'vote_average': float(data.get('imdbRating', 0) if data.get('imdbRating') != 'N/A' else 0),
-                                        'imdb_id': imdb_id
-                                    })
-                except Exception as fallback_e:
-                    print(f"OMDb Fallback Error: {fallback_e}")
-
-        # 2. Key-based Fallback to TMDB (if OMDb failed or no key)
-        if not movies and TMDB_API_KEY and "YOUR_TMDB_API_KEY" not in TMDB_API_KEY:
+                print(f"TMDB Fallback Error: {e}")
+        elif OMDB_API_KEY:
             try:
-                # Ask Gemini for Genres
-                prompt = f"""Map this mood '{mood}' to relevant TMDB genre IDs. 
-                Available IDs: Action=28, Adventure=12, Animation=16, Comedy=35, Crime=80, 
-                Documentary=99, Drama=18, Family=10751, Fantasy=14, History=36, Horror=27, 
-                Music=10402, Mystery=9648, Romance=10749, Sci-Fi=878, TV Movie=10770, 
-                Thriller=53, War=10752, Western=37. 
-                Return ONLY a JSON array of integers (e.g., [28, 12]). Do not format as markdown."""
-
-                payload = {"contents": [{"parts": [{"text": prompt}]}]}
-                headers = {"Content-Type": "application/json"}
-                response = requests.post(GEMINI_URL, json=payload, headers=headers)
-                response.raise_for_status()
-                
-                gemini_data = response.json()
-                text = gemini_data['candidates'][0]['content']['parts'][0]['text']
-                clean_text = text.replace('```json', '').replace('```', '').strip()
-                genre_ids = json.loads(clean_text)
-                
-                # Discover Movies from TMDB
-                tmdb_params = {
-                    'api_key': TMDB_API_KEY,
-                    'with_genres': ','.join(map(str, genre_ids)),
-                    'sort_by': 'popularity.desc',
-                    'language': 'en-US',
-                    'page': 1
-                }
-                tmdb_res = requests.get(TMDB_DISCOVER_URL, params=tmdb_params)
-                tmdb_res.raise_for_status()
-                movies = tmdb_res.json().get('results', [])
+                omdb_res = requests.get(OMDB_URL, params={'apikey': OMDB_API_KEY, 's': mood, 'type': 'movie'})
+                if omdb_res.status_code == 200:
+                    data = omdb_res.json()
+                    if data.get('Response') == 'True':
+                        explanation = f"Start with these movies for '{mood}'."
+                        for item in data.get('Search', [])[:5]:
+                            det_res = requests.get(OMDB_URL, params={'apikey': OMDB_API_KEY, 'i': item['imdbID']})
+                            if det_res.status_code == 200:
+                                det = det_res.json()
+                                movies.append({
+                                    'id': abs(hash(item['imdbID'])) % 100000,
+                                    'title': det.get('Title'),
+                                    'poster_path': det.get('Poster'),
+                                    'release_date': det.get('Released'),
+                                    'overview': det.get('Plot'),
+                                    'vote_average': float(det.get('imdbRating', 0) if det.get('imdbRating') != 'N/A' else 0)
+                                })
             except Exception as e:
-                print(f"TMDB API Error: {e}")
-        
-        # 3. Last Result Fallback (Mock)
-        if not movies:
-            print("Using mock movies due to missing/invalid keys or API error")
-            movies = get_mock_movies()
+                print(f"OMDb Fallback Error: {e}")
+    
+    # Strategy 3: Mock Data
+    if not movies:
+        movies = get_mock_movies()
+        explanation = "We couldn't connect services, but try these favorites!"
 
-        # 3. Save Search History
+    try:
         conn = get_db_connection()
         conn.execute('INSERT INTO search_history (mood, result_count) VALUES (?, ?)', (mood, len(movies)))
         conn.commit()
         conn.close()
+    except Exception as db_err:
+        print(f"DB Error: {db_err}")
 
-        return jsonify({'mood': mood, 'genreIds': genre_ids, 'movies': movies})
+    return jsonify({
+        'mood': mood,
+        'explanation': explanation,
+        'movies': movies
+    })
 
+@app.route('/api/movie/<int:movie_id>/providers', methods=['GET'])
+def get_providers(movie_id):
+    if not TMDB_API_KEY or "YOUR_TMDB_API_KEY" in TMDB_API_KEY:
+        return jsonify({'error': 'TMDB API Key missing'}), 500
+    
+    try:
+        url = f"{TMDB_BASE_URL}/movie/{movie_id}/watch/providers"
+        params = {'api_key': TMDB_API_KEY}
+        response = requests.get(url, params=params)
+        
+        if response.status_code == 200:
+            data = response.json()
+            results = data.get('results', {})
+            # Default to US, or make it dynamic if we had user location
+            us_providers = results.get('US', {})
+            return jsonify(us_providers)
+        else:
+            return jsonify({'error': 'Failed to fetch providers'}), response.status_code
+            
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Provider Fetch Error: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/favorites', methods=['GET', 'POST'])
+@app.route('/api/favorites', methods=['POST'])
 def favorites():
-    conn = get_db_connection()
-    if request.method == 'GET':
-        favs = conn.execute('SELECT * FROM favorites ORDER BY id DESC').fetchall()
-        # Convert rows to dicts
-        result = [dict(row) for row in favs]
-        conn.close()
-        return jsonify(result)
+    data = request.json
+    email = data.get('email')
     
-    if request.method == 'POST':
-        data = request.json
-        movie = data.get('movie')
-        try:
-            # Check existing
-            existing = conn.execute('SELECT id FROM favorites WHERE tmdb_id = ?', (movie['id'],)).fetchone()
-            
-            if existing:
-                conn.execute('DELETE FROM favorites WHERE tmdb_id = ?', (movie['id'],))
-                conn.commit()
-                conn.close()
-                return jsonify({'status': 'removed', 'tmdb_id': movie['id']})
-            else:
-                conn.execute('''
-                    INSERT INTO favorites (tmdb_id, title, poster_path, release_date, overview, rating) 
-                    VALUES (?, ?, ?, ?, ?, ?)
-                ''', (movie['id'], movie['title'], movie['poster_path'], movie['release_date'], movie['overview'], movie['vote_average']))
-                conn.commit()
-                conn.close()
-                return jsonify({'status': 'added', 'tmdb_id': movie['id']})
-        except Exception as e:
-            conn.close()
-            print(e)
-            return jsonify({'error': 'DB Error'}), 500
+    if not email:
+        return jsonify({'error': 'Email required'}), 400
+
+    users = load_users()
+    user = users.get(email)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Action: Get Favorites
+    if data.get('action') == 'get':
+         return jsonify(user.get('favorites', []))
+
+    # Action: Toggle Favorite
+    movie = data.get('movie')
+    if not movie:
+         return jsonify({'error': 'Movie data required'}), 400
+         
+    current_favs = user.get('favorites', [])
+    
+    # Check if exists
+    existing_index = next((index for (index, d) in enumerate(current_favs) if d["id"] == movie["id"]), None)
+    
+    if existing_index is not None:
+        current_favs.pop(existing_index)
+        status = 'removed'
+    else:
+        current_favs.append(movie)
+        status = 'added'
+        
+    user['favorites'] = current_favs
+    users[email] = user
+    save_users(users)
+    
+    return jsonify({'status': status, 'favorites': current_favs})
 
 @app.route('/api/history', methods=['GET'])
 def history():
