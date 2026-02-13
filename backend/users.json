@@ -1,0 +1,23 @@
+{
+    "bksai30@gmail.com": {
+        "password": "iamsai",
+        "favorites": [
+            {
+                "ai_reason": "This heartwarming comedy about an elf spreading Christmas cheer delivers infectious optimism and pure joy.",
+                "id": 319343,
+                "imdb_id": "tt0319343",
+                "overview": "A man raised by Santa's elves travels from the North Pole to New York City to meet his biological father, who doesn't know he exists and is in desperate need of some Christmas spirit.",
+                "poster_path": "https://m.media-amazon.com/images/M/MV5BNDQ0ZWE2NzgtNGNhMC00MDIwLWI1MjUtYjYxZGRiM2UyYTQzXkEyXkFqcGc@._V1_SX300.jpg",
+                "release_date": "07 Nov 2003",
+                "title": "Elf",
+                "vote_average": 7.1
+            }
+        ],
+        "profileIcon": "\ud83c\udf1f"
+    },
+    "admin@gmail.com": {
+        "password": "iamsai",
+        "favorites": [],
+        "profileIcon": "\u26be"
+    }
+}

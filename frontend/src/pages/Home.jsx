@@ -59,10 +59,10 @@ const Home = () => {
     return (
         <div className="min-h-screen pt-24 pb-12 px-4 max-w-7xl mx-auto flex flex-col items-center">
             <div className="text-center mb-12 max-w-2xl">
-                <h1 className="text-5xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-r from-white via-gray-200 to-gray-500">
+                <h1 className="text-5xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-r from-gray-700 via-gray-900 to-black dark:from-white dark:via-gray-200 dark:to-gray-500">
                     Discover Your Next <span className="text-primary">Masterpiece</span>
                 </h1>
-                <p className="text-gray-400 text-lg mb-8">
+                <p className="text-text/80 dark:text-gray-400 text-lg mb-8">
                     Tell us how you're feeling, and we'll curate the perfect cinematic experience for you using AI.
                 </p>
                 <SearchBar onSearch={handleSearch} isLoading={loading} />
@@ -82,7 +82,7 @@ const Home = () => {
                         </div>
                         <div>
                             <h3 className="font-semibold text-lg mb-1 text-white">AI Suggestion</h3>
-                            <p className="text-gray-300 leading-relaxed">{explanation}</p>
+                            <p className="text-text dark:text-gray-300 leading-relaxed">{explanation}</p>
                         </div>
                     </div>
                 </div>

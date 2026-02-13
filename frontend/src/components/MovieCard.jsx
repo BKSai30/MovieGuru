@@ -25,7 +25,7 @@ const MovieCard = ({ movie, isFavorite, onToggleFavorite, onClick }) => {
                     className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">
-                    <p className="text-gray-300 text-sm line-clamp-3 mb-4 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all delay-100">
+                    <p className="text-white text-sm line-clamp-3 mb-4 opacity-0 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0 transition-all delay-100">
                         {movie.overview}
                     </p>
                     <button
@@ -49,7 +49,7 @@ const MovieCard = ({ movie, isFavorite, onToggleFavorite, onClick }) => {
 
             <div className="p-4">
                 <h3 className="font-bold text-lg leading-tight mb-1 truncate" title={movie.title}>{movie.title}</h3>
-                <p className="text-gray-400 text-xs">{movie.release_date?.split('-')[0] || 'Unknown'}</p>
+                <p className="text-text/60 dark:text-gray-400 text-xs">{movie.release_date?.split('-')[0] || 'Unknown'}</p>
             </div>
         </motion.div>
     );

@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+    darkMode: 'class',
     content: [
         "./index.html",
         "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,11 +8,11 @@ export default {
     theme: {
         extend: {
             colors: {
-                background: '#0F0F0F',
-                surface: '#1A1A1A',
-                primary: '#E50914',
-                text: '#E5E5E5',
-                accent: '#FFD700',
+                background: 'var(--background)',
+                surface: 'var(--surface)',
+                primary: 'var(--primary)',
+                text: 'var(--text)',
+                accent: 'var(--accent)',
             },
             fontFamily: {
                 sans: ['Inter', 'sans-serif'],

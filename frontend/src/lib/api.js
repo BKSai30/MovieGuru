@@ -16,7 +16,8 @@ const getUserEmail = () => {
 };
 
 export const getRecommendations = async (mood) => {
-    const response = await api.post('/recommend', { mood });
+    const email = getUserEmail();
+    const response = await api.post('/recommend', { mood, email });
     return response.data;
 };
 
@@ -59,9 +60,9 @@ export const toggleFavorite = async (movie) => {
 };
 
 export const getHistory = async () => {
-    // History is still SQLite in backend, but we need to update endpoint if we want per-user
-    // For now, let's just return empty or keep as is (global history)
-    const response = await api.get('/history');
+    const email = getUserEmail();
+    if (!email) return [];
+    const response = await api.get('/history', { params: { email } });
     return response.data;
 };
 
