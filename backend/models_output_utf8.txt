@@ -1,3 +1,0 @@
-Listing models...
-Status Code: 400
-Error: {"code":"Client specified an invalid argument","error":"Incorrect API key provided: sk***4f. You can obtain an API key from https://console.x.ai."}
