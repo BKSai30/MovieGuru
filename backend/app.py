@@ -28,7 +28,8 @@ print(f"DEBUG: Loaded OpenRouter Key: {OPENROUTER_API_KEY[:5]}...{OPENROUTER_API
 
 # Initialize Firebase
 try:
-    cred = credentials.Certificate('serviceAccountKey.json')
+    cred_path = os.path.join(os.path.dirname(__file__), 'serviceAccountKey.json')
+    cred = credentials.Certificate(cred_path)
     firebase_admin.initialize_app(cred)
     db = firestore.client()
     print("Firebase Admin SDK initialized.")
