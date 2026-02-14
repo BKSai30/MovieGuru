@@ -55,6 +55,28 @@
         "movieYear": "2000",
         "moviePlot": "A FedEx executive undergoes a physical and emotional transformation after crash landing on a deserted island.",
         "timestamp": "2026-02-14 02:06:35.999998",
-        "comments": []
+        "comments": [
+            {
+                "id": "6417e63a-cf58-45bf-a407-459cbc183835",
+                "author": "bksai30@gmail.com",
+                "content": "superb plot ",
+                "profileIcon": "\ud83c\udf7f",
+                "timestamp": "2026-02-14T18:04:14.379312"
+            }
+        ]
+    },
+    {
+        "author": "bksai30@gmail.com",
+        "movieTitle": "the da vinci code",
+        "content": "superb movie plot",
+        "rating": 5,
+        "anonymous": false,
+        "profileIcon": "\ud83c\udf7f",
+        "moviePoster": "https://m.media-amazon.com/images/M/MV5BMjIxMjQyMTc3Nl5BMl5BanBnXkFtZTcwMTA1MDUzMw@@._V1_SX300.jpg",
+        "movieYear": "2006",
+        "moviePlot": "A murder and clues in paintings lead to the discovery of a closely guarded religious mystery.",
+        "timestamp": "2026-02-14T18:03:46.415797",
+        "comments": [],
+        "id": "d6f476d2-e1b0-4023-9644-95adf296975a"
     }
 ]

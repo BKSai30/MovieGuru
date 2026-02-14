@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getFavorites, getHistory, toggleFavorite } from '../lib/api';
+import { getFavorites, getHistory, toggleFavorite, deleteHistory } from '../lib/api';
 import MovieCard from '../components/MovieCard';
 import MovieDetailModal from '../components/MovieDetailModal';
 import { Clock, Heart, Trash2 } from 'lucide-react';
@@ -41,9 +41,14 @@ const Saved = () => {
         }
     };
 
-    const handleDeleteHistoryItem = (itemId) => {
+    const handleDeleteHistoryItem = async (itemId) => {
         setHistory(prev => prev.filter(item => item.id !== itemId));
-        // You can also call an API here to delete from backend if needed
+        try {
+            await deleteHistory(itemId);
+        } catch (error) {
+            console.error(error);
+            // Optionally revert optimistic update here
+        }
     };
 
     if (loading) return <div className="min-h-screen flex items-center justify-center text-primary">Loading...</div>;

@@ -43,7 +43,7 @@ const MovieCard = ({ movie, isFavorite, onToggleFavorite, onClick }) => {
                 </div>
                 <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md flex items-center gap-1 border border-white/10">
                     <Star size={12} className="text-yellow-400 fill-yellow-400" />
-                    <span className={`text-xs font-bold ${ratingColor}`}>{movie.vote_average?.toFixed(1)}</span>
+                    <span className={`text-xs font-bold ${ratingColor}`}>{Number(movie.vote_average || 0).toFixed(1)}</span>
                 </div>
             </div>
 

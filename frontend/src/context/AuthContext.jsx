@@ -1,15 +1,12 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import {
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    signOut,
-    onAuthStateChanged
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import axios from 'axios';
 
 const AuthContext = createContext();
+
+const api = axios.create({
+    baseURL: '/api',
+});
 
 export function useAuth() {
     return useContext(AuthContext);
@@ -20,66 +17,57 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                // Fetch additional user data from Firestore
-                const userDocRef = doc(db, 'users', user.email);
-                const userDoc = await getDoc(userDocRef);
-                let userData = { email: user.email, uid: user.uid, profileIcon: '👤' };
-
-                if (userDoc.exists()) {
-                    userData = { ...userData, ...userDoc.data() };
-                }
-                setCurrentUser(userData);
-            } else {
-                setCurrentUser(null);
+        // Check for persisted user in local storage
+        const storedUser = localStorage.getItem('movieguru_user');
+        if (storedUser) {
+            try {
+                setCurrentUser(JSON.parse(storedUser));
+            } catch (e) {
+                console.error("Failed to parse stored user", e);
             }
-            setLoading(false);
-        });
-
-        return unsubscribe;
+        }
+        setLoading(false);
     }, []);
+
+    const saveUser = (user) => {
+        setCurrentUser(user);
+        localStorage.setItem('movieguru_user', JSON.stringify(user));
+    };
 
     async function signup(email, password) {
         try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-
-            // Create user document in Firestore
-            const userData = {
-                email: user.email,
-                profileIcon: '👤',
-                favorites: [],
-                createdAt: new Date().toISOString()
-            };
-
-            await setDoc(doc(db, 'users', user.email), userData);
-            setCurrentUser({ ...userData, uid: user.uid });
+            const response = await api.post('/signup', { email, password });
+            // Backend returns: { email, favorites, profileIcon }
+            const user = response.data;
+            saveUser(user); // Automatically login after signup
             return user;
         } catch (error) {
             console.error("Signup error:", error);
-            throw error;
+            throw error; // Let component handle error
         }
     }
 
     async function login(email, password) {
-        return signInWithEmailAndPassword(auth, email, password);
+        try {
+            const response = await api.post('/login', { email, password });
+            const user = response.data;
+            saveUser(user);
+            return user;
+        } catch (error) {
+            console.error("Login error:", error);
+            throw error;
+        }
     }
 
     async function updateProfileIcon(profileIcon) {
         if (!currentUser) return;
-
         try {
-            const userDocRef = doc(db, 'users', currentUser.email);
-            // Ensure document exists before update
-            const docSnap = await getDoc(userDocRef);
-            if (!docSnap.exists()) {
-                await setDoc(userDocRef, { email: currentUser.email, favorites: [], profileIcon }, { merge: true });
-            } else {
-                await updateDoc(userDocRef, { profileIcon });
-            }
-
-            setCurrentUser(prev => ({ ...prev, profileIcon }));
+            const response = await api.put('/profile/icon', {
+                email: currentUser.email,
+                profileIcon
+            });
+            const updatedUser = { ...currentUser, profileIcon: response.data.profileIcon };
+            saveUser(updatedUser);
         } catch (error) {
             console.error("Update profile error:", error);
             throw error;
@@ -87,7 +75,8 @@ export function AuthProvider({ children }) {
     }
 
     function logout() {
-        return signOut(auth);
+        setCurrentUser(null);
+        localStorage.removeItem('movieguru_user');
     }
 
     const value = {
@@ -104,3 +93,5 @@ export function AuthProvider({ children }) {
         </AuthContext.Provider>
     );
 }
+
+export default AuthProvider;

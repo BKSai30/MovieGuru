@@ -11,6 +11,51 @@
                 "release_date": "07 Nov 2003",
                 "title": "Elf",
                 "vote_average": 7.1
+            },
+            {
+                "ai_reason": "It portrays the horrors of the Holocaust and the emotional weight of survival and loss.",
+                "id": "tt0108052",
+                "overview": "In German-occupied Poland during World War II, industrialist Oskar Schindler gradually becomes concerned for his Jewish workforce after witnessing their persecution by the Nazis.",
+                "poster_path": "https://m.media-amazon.com/images/M/MV5BNjM1ZDQxYWUtMzQyZS00MTE1LWJmZGYtNGUyNTdlYjM3ZmVmXkEyXkFqcGc@._V1_SX300.jpg",
+                "release_date": "04 Feb 1994",
+                "title": "Schindler's List",
+                "vote_average": 9
+            },
+            {
+                "ai_reason": "Based on a true story of a man's struggle with homelessness while caring for his son, evoking empathy and sadness.",
+                "id": "tt0454921",
+                "overview": "A struggling salesman takes custody of his son as he's poised to begin a life-changing professional career.",
+                "poster_path": "https://m.media-amazon.com/images/M/MV5BMTQ5NjQ0NDI3NF5BMl5BanBnXkFtZTcwNDI0MjEzMw@@._V1_SX300.jpg",
+                "release_date": "15 Dec 2006",
+                "title": "The Pursuit of Happyness",
+                "vote_average": 8
+            },
+            {
+                "ai_reason": "An epic romance ending in tragic loss, capturing the pain of love and separation.",
+                "id": "tt0120338",
+                "overview": "A seventeen-year-old aristocrat falls in love with a kind but poor artist aboard the luxurious, ill-fated R.M.S. Titanic.",
+                "poster_path": "https://m.media-amazon.com/images/M/MV5BYzYyN2FiZmUtYWYzMy00MzViLWJkZTMtOGY1ZjgzNWMwN2YxXkEyXkFqcGc@._V1_SX300.jpg",
+                "release_date": "19 Dec 1997",
+                "title": "Titanic",
+                "vote_average": 8
+            },
+            {
+                "ai_reason": "A raw depiction of grief and guilt after a family tragedy, with profound melancholy.",
+                "id": "tt4034228",
+                "overview": "A depressed uncle is asked to take care of his teenage nephew after the boy's father dies.",
+                "poster_path": "https://m.media-amazon.com/images/M/MV5BMTYxMjk0NDg4Ml5BMl5BanBnXkFtZTgwODcyNjA5OTE@._V1_SX300.jpg",
+                "release_date": "16 Dec 2016",
+                "title": "Manchester by the Sea",
+                "vote_average": 7.8
+            },
+            {
+                "ai_reason": "A heart-wrenching story about a young girl coping with loss, touching on themes of death and coming-of-age.",
+                "id": "tt0102492",
+                "overview": "Vada is obsessed with death. Her mother is dead, and her father runs a funeral parlor. When Vada's father hires Shelly, a makeup expert, and begins to fall in love, Vada is outraged and does everything in her power to split them up.",
+                "poster_path": "https://m.media-amazon.com/images/M/MV5BNmI5M2EzZDUtZTBkZS00YWFmLWFhZTMtNjc3YTllZDBhODQ4XkEyXkFqcGc@._V1_SX300.jpg",
+                "release_date": "27 Nov 1991",
+                "title": "My Girl",
+                "vote_average": 6.9
             }
         ],
         "profileIcon": "\ud83c\udf7f"

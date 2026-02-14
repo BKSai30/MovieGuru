@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import api from '../lib/api';
 import { MessageSquare, Trash2, Send, X, Plus, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -30,9 +31,8 @@ const Reviews = () => {
 
     const fetchPosts = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:5000/api/posts');
-            const data = await response.json();
-            setPosts(data);
+            const response = await api.get('/posts');
+            setPosts(response.data);
         } catch (error) {
             console.error('Error fetching posts:', error);
         }
@@ -41,25 +41,19 @@ const Reviews = () => {
     const handleCreatePost = async (e) => {
         e.preventDefault();
         try {
-            // Use default icon if anonymous, otherwise user's profile icon
             const profileIcon = newPost.anonymous ? '👤' : (currentUser.profileIcon || '👤');
-            const response = await fetch('http://127.0.0.1:5000/api/posts', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: currentUser.email,
-                    movieTitle: newPost.movieTitle,
-                    content: newPost.content,
-                    rating: newPost.rating,
-                    anonymous: newPost.anonymous,
-                    profileIcon: profileIcon
-                })
+            await api.post('/posts', {
+                email: currentUser.email,
+                movieTitle: newPost.movieTitle,
+                content: newPost.content,
+                rating: newPost.rating,
+                anonymous: newPost.anonymous,
+                profileIcon: profileIcon
             });
-            if (response.ok) {
-                setNewPost({ movieTitle: '', content: '', rating: 5, anonymous: false });
-                setShowCreatePost(false);
-                fetchPosts();
-            }
+
+            setNewPost({ movieTitle: '', content: '', rating: 5, anonymous: false });
+            setShowCreatePost(false);
+            fetchPosts();
         } catch (error) {
             console.error('Error creating post:', error);
         }
@@ -68,20 +62,15 @@ const Reviews = () => {
     const handleEditPost = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/posts/${editingPost.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: currentUser.email,
-                    movieTitle: editingPost.movieTitle,
-                    content: editingPost.content,
-                    rating: editingPost.rating
-                })
+            await api.put(`/posts/${editingPost.id}`, {
+                email: currentUser.email,
+                movieTitle: editingPost.movieTitle,
+                content: editingPost.content,
+                rating: editingPost.rating
             });
-            if (response.ok) {
-                setEditingPost(null);
-                fetchPosts();
-            }
+
+            setEditingPost(null);
+            fetchPosts();
         } catch (error) {
             console.error('Error editing post:', error);
         }
@@ -90,15 +79,11 @@ const Reviews = () => {
     const handleDeletePost = async (postId) => {
         if (!window.confirm('Are you sure you want to delete this post?')) return;
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/posts/${postId}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: currentUser.email })
+            await api.delete(`/posts/${postId}`, {
+                data: { email: currentUser.email }
             });
-            if (response.ok) {
-                fetchPosts();
-                setSelectedPost(null);
-            }
+            fetchPosts();
+            setSelectedPost(null);
         } catch (error) {
             console.error('Error deleting post:', error);
         }
@@ -108,19 +93,14 @@ const Reviews = () => {
         if (!newComment.trim()) return;
         try {
             const profileIcon = currentUser.profileIcon || '👤';
-            const response = await fetch(`http://127.0.0.1:5000/api/posts/${postId}/comments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: currentUser.email,
-                    content: newComment,
-                    profileIcon: profileIcon
-                })
+            await api.post(`/posts/${postId}/comments`, {
+                email: currentUser.email,
+                content: newComment,
+                profileIcon: profileIcon
             });
-            if (response.ok) {
-                setNewComment('');
-                fetchPosts();
-            }
+
+            setNewComment('');
+            fetchPosts();
         } catch (error) {
             console.error('Error adding comment:', error);
         }
@@ -128,18 +108,13 @@ const Reviews = () => {
 
     const handleEditComment = async (postId, commentId, newContent) => {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/posts/${postId}/comments/${commentId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: currentUser.email,
-                    content: newContent
-                })
+            await api.put(`/posts/${postId}/comments/${commentId}`, {
+                email: currentUser.email,
+                content: newContent
             });
-            if (response.ok) {
-                setEditingComment(null);
-                fetchPosts();
-            }
+
+            setEditingComment(null);
+            fetchPosts();
         } catch (error) {
             console.error('Error editing comment:', error);
         }
@@ -147,14 +122,11 @@ const Reviews = () => {
 
     const handleDeleteComment = async (postId, commentId) => {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/posts/${postId}/comments/${commentId}`, {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: currentUser.email })
+            await api.delete(`/posts/${postId}/comments/${commentId}`, {
+                data: { email: currentUser.email }
             });
-            if (response.ok) {
-                fetchPosts();
-            }
+
+            fetchPosts();
         } catch (error) {
             console.error('Error deleting comment:', error);
         }

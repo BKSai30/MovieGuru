@@ -1,11 +1,8 @@
 
-
 import os
 import json
 import datetime
 import requests
-import firebase_admin
-from firebase_admin import credentials, firestore
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
@@ -16,7 +13,7 @@ app = Flask(__name__)
 CORS(app)
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-TMDB_API_KEY = os.getenv("TMDB_API_KEY") # Keep for fallback
+TMDB_API_KEY = os.getenv("TMDB_API_KEY") 
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 
 # Sanitize keys
@@ -26,25 +23,179 @@ if TMDB_API_KEY: TMDB_API_KEY = TMDB_API_KEY.strip().replace('"', '').replace("'
 
 print(f"DEBUG: Loaded OpenRouter Key: {OPENROUTER_API_KEY[:5]}...{OPENROUTER_API_KEY[-5:] if OPENROUTER_API_KEY else 'None'}")
 
-# Initialize Firebase
-try:
-    cred_path = os.path.join(os.path.dirname(__file__), 'serviceAccountKey.json')
-    cred = credentials.Certificate(cred_path)
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    print("Firebase Admin SDK initialized.")
-except Exception as e:
-    print(f"CRITICAL ERROR: Failed to initialize Firebase: {e}")
-    db = None
-
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 OMDB_URL = "http://www.omdbapi.com/"
 
+# --- Local DB Implementation ---
+class LocalDocument:
+    def __init__(self, data, doc_id, wrapper):
+        self._data = data
+        self.id = doc_id
+        self.exists = data is not None
+        self._wrapper = wrapper
+
+    def to_dict(self):
+        return self._data if self._data else {}
+    
+    @property
+    def reference(self):
+        return self
+
+    def get(self):
+        return self
+
+    def set(self, data):
+        self._wrapper.set_doc(self.id, data)
+
+    def update(self, data):
+        if not self.exists: return
+        current = self._data.copy()
+        
+        # Handle simple updates and ArrayUnion
+        for k, v in data.items():
+            if isinstance(v, list) and hasattr(v, 'is_array_union'):
+                if k not in current: current[k] = []
+                current[k].extend(v)
+            else:
+                current[k] = v
+        self._wrapper.set_doc(self.id, current)
+
+    def delete(self):
+        self._wrapper.delete_doc(self.id)
+
+class LocalCollection:
+    def __init__(self, name):
+        self.name = name
+        self.file_path = os.path.join(os.path.dirname(__file__), f'{name}.json')
+        self._load()
+
+    def _load(self):
+        if not os.path.exists(self.file_path):
+            if self.name in ['posts', 'search_history']: self.data = []  # Lists
+            else: self.data = {} # Users as dict
+            self._save()
+        else:
+            with open(self.file_path, 'r') as f:
+                try:
+                    self.data = json.load(f)
+                except:
+                    self.data = [] if self.name in ['posts', 'search_history'] else {}
+
+    def _save(self):
+        with open(self.file_path, 'w') as f:
+            json.dump(self.data, f, indent=4, default=str)
+
+    def document(self, doc_id):
+        if isinstance(self.data, dict):
+            # Dict based collection (users)
+            return LocalDocument(self.data.get(doc_id), doc_id, self)
+        else:
+            # List based collection (posts, history)
+            # Find item by 'id' field
+            item = next((x for x in self.data if str(x.get('id', '')) == str(doc_id)), None)
+            return LocalDocument(item, doc_id, self)
+
+    def set_doc(self, doc_id, data):
+        if isinstance(self.data, dict):
+            self.data[doc_id] = data
+        else:
+            # Create new or replace
+            existing = next((i for i, x in enumerate(self.data) if str(x.get('id', '')) == str(doc_id)), None)
+            data['id'] = doc_id
+            if existing is not None:
+                self.data[existing] = data
+            else:
+                self.data.append(data)
+        self._save()
+
+    def delete_doc(self, doc_id):
+        if isinstance(self.data, dict):
+            if doc_id in self.data:
+                del self.data[doc_id]
+        else:
+            self.data = [x for x in self.data if str(x.get('id', '')) != str(doc_id)]
+        self._save()
+
+    def add(self, data):
+        import uuid
+        doc_id = str(uuid.uuid4())
+        data['id'] = doc_id
+        if isinstance(self.data, list):
+            self.data.append(data)
+            self._save()
+            return datetime.datetime.now(), self.document(doc_id)
+        return None, None
+
+    # Query methods
+    def where(self, field, op, value):
+        # Return a filtered View of collection
+        return QueryView(self.data, self.name).where(field, op, value)
+
+    def order_by(self, field, direction='desc'):
+        return QueryView(self.data, self.name).order_by(field, direction)
+        
+    def stream(self):
+        return QueryView(self.data, self.name).stream()
+
+class QueryView:
+    def __init__(self, data, name):
+        self.data = data # List or Dict
+        self.name = name # collection name
+        
+    def where(self, field, op, value):
+        # Only support == for now as per app usage
+        if isinstance(self.data, dict):
+            filtered = {k:v for k,v in self.data.items() if v.get(field) == value}
+            return QueryView(filtered, self.name)
+        else:
+            filtered = [x for x in self.data if x.get(field) == value]
+            return QueryView(filtered, self.name)
+
+    def order_by(self, field, direction='desc'):
+        # Only lists can be ordered
+        if isinstance(self.data, list):
+            reverse = True # Default desc
+            sorted_data = sorted(self.data, key=lambda x: x.get(field, ''), reverse=reverse)
+            return QueryView(sorted_data, self.name)
+        return self
+
+    def limit(self, limit):
+        if isinstance(self.data, list):
+            return QueryView(self.data[:limit], self.name)
+        return self
+
+    def stream(self):
+        # Yield LocalDocuments
+        if isinstance(self.data, dict):
+            for k, v in self.data.items():
+                yield LocalDocument(v, k, None) # Wrapper None for read-only stream mostly
+        else:
+            for item in self.data:
+                yield LocalDocument(item, item.get('id'), LocalCollection(self.name))
+
+class LocalDB:
+    def collection(self, name):
+        return LocalCollection(name)
+
+# Mock Firestore helpers
+class MockFirestore:
+    def client(self): return LocalDB()
+    class Query:
+        DESCENDING = 'desc'
+    class ArrayUnion(list):
+        def __init__(self, iterable):
+            super().__init__(iterable)
+            self.is_array_union = True
+    SERVER_TIMESTAMP = datetime.datetime.now().isoformat()
+
+firestore = MockFirestore()
+db = LocalDB() 
+print("DEBUG: Using Local JSON Database")
+
+
 # --- Helper Functions ---
 def get_user_ref(email):
-    # Using email as document ID for simplicity, assuming unique emails
-    # Encode email to be safe as ID or just use clean string
     return db.collection('users').document(email)
 
 def get_post_ref(post_id):
@@ -54,7 +205,7 @@ def get_post_ref(post_id):
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -67,10 +218,10 @@ def signup():
         return jsonify({'error': 'User already exists'}), 400
         
     user_data = {
-        'password': password, # Note: In production, HASH this!
+        'password': password, 
         'favorites': [],
         'profileIcon': '👤',
-        'createdAt': datetime.datetime.now()
+        'createdAt': datetime.datetime.now().isoformat()
     }
     user_ref.set(user_data)
     
@@ -78,7 +229,7 @@ def signup():
 
 @app.route('/api/login', methods=['POST'])
 def login():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -106,7 +257,7 @@ def login():
 
 @app.route('/api/profile/icon', methods=['PUT'])
 def update_profile_icon():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     profile_icon = data.get('profileIcon')
@@ -121,23 +272,14 @@ def update_profile_icon():
     # Update user's profile icon
     user_ref.update({'profileIcon': profile_icon})
     
-    # Update icons in posts (Batch update preferable for scalability)
-    # 1. Update own posts
+    # Update icons in posts 
     posts_ref = db.collection('posts')
     query = posts_ref.where('author', '==', email).stream()
     for post in query:
-        # Don't update anonymous posts
         if not post.to_dict().get('anonymous', False):
-             post.reference.update({'profileIcon': profile_icon})
+             post.update({'profileIcon': profile_icon})
              
-    # 2. Update comments (More structured in NoSQL: often comments are subcollections or array)
-    # Since we are sticking to flat 'comments' array in document for now (simple migration)
-    # We have to scan all posts or structured differently. 
-    # For now, to keep it simple/working like before (but this is expensive in Firestore for ALL posts)
-    # We will only query recent posts or accept eventual consistency. 
-    # BETTER: just handle this on read-time or client-side.
-    # But to match previous logic logic:
-    
+    # Update comments
     all_posts = posts_ref.stream()
     updated = False
     for post_doc in all_posts:
@@ -150,7 +292,7 @@ def update_profile_icon():
                 comments_changed = True
         
         if comments_changed:
-            post_doc.reference.update({'comments': p_comments})
+            post_doc.update({'comments': p_comments})
             updated = True
 
     return jsonify({'profileIcon': profile_icon, 'postsUpdated': updated})
@@ -176,20 +318,7 @@ def recommend():
     explanation = ""
     use_tmdb = TMDB_API_KEY and len(TMDB_API_KEY) > 20 and "YOUR_TMDB_API_KEY" not in TMDB_API_KEY
 
-    # AI Recommendation Logic (Same as before)
-    if OPENROUTER_API_KEY:
-        try:
-             # ... (Keep existing AI logic structure, abbreviated for brevity)
-             # Reuse the exact same AI prompt/req logic as previous file
-             # For safety in this rewrite, I'll copy the core logic back
-             pass 
-        except:
-             pass
-    
-    # ... (Connecting to previous AI/Search Implementations) ...
-    # Implementation Note: I am pasting the FULL logic back to ensure no regression
-    
-    # [Start AI Logic Reuse]
+    # AI Recommendation Logic
     if OPENROUTER_API_KEY:
         try:
             print("DEBUG: Asking OpenRouter (Grok) for recommendations...")
@@ -227,7 +356,28 @@ def recommend():
                                         movies.append({'id': m['id'], 'title': m['title'], 'poster_path': m.get('poster_path'), 'overview': m.get('overview'), 'vote_average': m.get('vote_average'), 'ai_reason': reason, 'release_date': m.get('release_date')})
                                 elif OMDB_API_KEY:
                                     # OMDb fallback
-                                    pass # (Simplified for brevity, assume similar logic)
+                                    try:
+                                        omdb_res = requests.get(OMDB_URL, params={'apikey': OMDB_API_KEY, 't': title, 'type': 'movie'})
+                                        if omdb_res.status_code == 200:
+                                            m = omdb_res.json()
+                                            if m.get('Response') == 'True':
+                                                poster = m.get('Poster')
+                                                if poster == 'N/A': poster = None
+                                                try:
+                                                    rating = float(m.get('imdbRating', 0))
+                                                except:
+                                                    rating = 0.0
+                                                movies.append({
+                                                    'id': m.get('imdbID'),
+                                                    'title': m.get('Title'),
+                                                    'poster_path': poster,
+                                                    'overview': m.get('Plot'),
+                                                    'vote_average': rating, 
+                                                    'ai_reason': reason,
+                                                    'release_date': m.get('Released')
+                                                })
+                                    except Exception as e:
+                                        print(f"OMDb Error for {title}: {e}")
                             
                             if movies: break
                 except Exception as e:
@@ -249,7 +399,7 @@ def recommend():
         movies = get_mock_movies()
         explanation = "We couldn't connect services, but try these favorites!"
 
-    # SAVE TO FIRESTORE (Search History)
+    # SAVE TO HISTORY
     if db:
         try:
             if email:
@@ -260,13 +410,13 @@ def recommend():
                     'timestamp': firestore.SERVER_TIMESTAMP
                 })
         except Exception as e:
-            print(f"Firestore History Error: {e}")
+            print(f"History Save Error: {e}")
 
     return jsonify({'mood': mood, 'explanation': explanation, 'movies': movies})
 
 @app.route('/api/favorites', methods=['POST'])
 def favorites():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     
@@ -288,8 +438,8 @@ def favorites():
     movie = data.get('movie')
     if not movie: return jsonify({'error': 'Movie data required'}), 400
     
-    # Check if exists (by ID)
-    existing_index = next((index for (index, d) in enumerate(current_favs) if d.get("id") == movie.get("id")), None)
+    # Check if exists (by ID) -- Flexible for int vs str ids
+    existing_index = next((index for (index, d) in enumerate(current_favs) if str(d.get("id")) == str(movie.get("id"))), None)
     
     if existing_index is not None:
         current_favs.pop(existing_index)
@@ -303,12 +453,11 @@ def favorites():
 
 @app.route('/api/history', methods=['GET'])
 def history():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     email = request.args.get('email')
     if not email: return jsonify([])
     
     try:
-        # Query Firestore
         history_ref = db.collection('search_history')
         query = history_ref.where('email', '==', email).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(20)
         docs = query.stream()
@@ -316,9 +465,10 @@ def history():
         result = []
         for doc in docs:
             d = doc.to_dict()
-            # Convert timestamp to string if needed
+            # Clean up timestamp for frontend
             if d.get('timestamp'):
                 d['timestamp'] = str(d['timestamp'])
+            d['id'] = doc.id
             result.append(d)
             
         return jsonify(result)
@@ -326,14 +476,21 @@ def history():
         print(f"History Error: {e}")
         return jsonify([])
 
-# --- Posts API (Firestore) ---
+@app.route('/api/history/<history_id>', methods=['DELETE'])
+def delete_history(history_id):
+    try:
+        db.collection('search_history').document(history_id).delete()
+        return jsonify({'message': 'Deleted successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# --- Posts API ---
 
 @app.route('/api/posts', methods=['GET'])
 def get_posts():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     try:
         posts_ref = db.collection('posts')
-        # Order by timestamp desc
         query = posts_ref.order_by('timestamp', direction=firestore.Query.DESCENDING).limit(50)
         docs = query.stream()
         
@@ -349,7 +506,7 @@ def get_posts():
 
 @app.route('/api/posts', methods=['POST'])
 def create_post():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     movie_title = data.get('movieTitle')
@@ -361,7 +518,6 @@ def create_post():
     if not all([email, movie_title, content]):
         return jsonify({'error': 'Missing required fields'}), 400
     
-    # OMDb Poster Fetch (Same as before)
     movie_poster = None
     movie_year = None
     movie_plot = None
@@ -386,11 +542,10 @@ def create_post():
         'moviePoster': movie_poster,
         'movieYear': movie_year,
         'moviePlot': movie_plot,
-        'timestamp': str(datetime.datetime.now()),
+        'timestamp': datetime.datetime.now().isoformat(),
         'comments': []
     }
     
-    # Add to Firestore (Let Firestore gen ID)
     update_time, doc_ref = db.collection('posts').add(new_post)
     new_post['id'] = doc_ref.id
     
@@ -398,7 +553,7 @@ def create_post():
 
 @app.route('/api/posts/<post_id>', methods=['PUT'])
 def edit_post(post_id):
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     
@@ -424,7 +579,7 @@ def edit_post(post_id):
 
 @app.route('/api/posts/<post_id>', methods=['DELETE'])
 def delete_post(post_id):
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     
@@ -442,7 +597,7 @@ def delete_post(post_id):
 
 @app.route('/api/posts/<post_id>/comments', methods=['POST'])
 def add_comment(post_id):
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     email = data.get('email')
     content = data.get('content')
@@ -460,10 +615,9 @@ def add_comment(post_id):
         'author': email,
         'content': content,
         'profileIcon': profile_icon,
-        'timestamp': str(datetime.datetime.now())
+        'timestamp': datetime.datetime.now().isoformat()
     }
     
-    # Firestore array_union
     doc_ref.update({
         'comments': firestore.ArrayUnion([new_comment])
     })
