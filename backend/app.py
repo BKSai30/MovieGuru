@@ -164,7 +164,7 @@ def get_mock_movies():
 
 @app.route('/api/recommend', methods=['POST'])
 def recommend():
-    if not db: return jsonify({'error': 'Database unavailable'}), 500
+    # if not db: return jsonify({'error': 'Database unavailable'}), 500
     data = request.json
     mood = data.get('mood')
     email = data.get('email')
@@ -250,16 +250,17 @@ def recommend():
         explanation = "We couldn't connect services, but try these favorites!"
 
     # SAVE TO FIRESTORE (Search History)
-    try:
-        if email:
-            db.collection('search_history').add({
-                'mood': mood,
-                'result_count': len(movies),
-                'email': email,
-                'timestamp': firestore.SERVER_TIMESTAMP
-            })
-    except Exception as e:
-        print(f"Firestore History Error: {e}")
+    if db:
+        try:
+            if email:
+                db.collection('search_history').add({
+                    'mood': mood,
+                    'result_count': len(movies),
+                    'email': email,
+                    'timestamp': firestore.SERVER_TIMESTAMP
+                })
+        except Exception as e:
+            print(f"Firestore History Error: {e}")
 
     return jsonify({'mood': mood, 'explanation': explanation, 'movies': movies})
 
@@ -470,5 +471,5 @@ def add_comment(post_id):
     return jsonify(new_comment), 201
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5001))
     app.run(port=port, debug=True)
